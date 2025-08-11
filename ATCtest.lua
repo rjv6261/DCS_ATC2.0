@@ -1,4 +1,4 @@
--- MyBMSATC.lua - BMS-style ATC for DCS Missions written by Spicy
+-- spicyATC.lua - BMS-style ATC for DCS Missions written by Spicy
 -- Expanded for F10 radio menu with three categories (Ground, Tower, Approach)
 
 local playerUnits = {}  -- Table to track players for MP
@@ -89,3 +89,4 @@ local function onEvent(event)
 end
 
 world.addEventHandler({onEvent = onEvent})
+
