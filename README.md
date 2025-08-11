@@ -2,6 +2,8 @@
 
 If you look at the attached file, that is my current work for .lua . There is more going on and I am simply including the main file so that others can see progress on it as we go. I have a solid idea of what I want to improve and add to DCS.
 
+RIGHT NOW THE SCRIPT IS BEING TESTED! IF IT WORKS, I WILL BEGIN TO IMPLEMENT MORE LOGIC FOR START-UP and TAXI/TAKEOFF
+
 A mod/script for the popular game DCS. This will hopefully work to slowly improve and upgrade their ATC system. As of right now, I am still working on it and trying to get it implemented, bear with me and if you feel that you can help, add me on discord @spicy2160
 
 Plans right now are rough but are below (attached to this repo is the .lua I am building on)
