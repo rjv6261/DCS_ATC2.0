@@ -7,8 +7,13 @@ A mod/script for the popular game DCS. This will hopefully work to slowly improv
 Plans right now are rough but are below (attached to this repo is the .lua I am building on)
 
 Update Alpha 1.0
-- A working system (separate or connected to DCS' ATC), that will at least respond to you when you contact on the radio system
-- Taxi and parking for after you land
+- F10 menu: ATC > [Ground Control, Tower, Approach] submenus.
+- Ground: Request Startup (with wingmen check), Request Taxi (placeholder path).
+- Tower: Request Takeoff (placeholder clearance).
+- Approach: Inbound VFR/IFR (placeholder response).
+- Frequency advice: Checks player's radio vs. nearest airbase, displays "Switch to X MHz" if mismatched.
+- System messages: All ATC interactions shown in top-right (10s duration, stackable).
+- Event-driven: Responds to player entering unit, radio messages, and takeoffs.
 
 Update Alpha 1.1
 - Different menus that are similar to BMS, allowing the user to dictate Start-up, Taxi, Takeoff, Landing , parking (or maybe I will dictate it based on state)
