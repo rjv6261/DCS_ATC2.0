@@ -5,7 +5,7 @@ Plans right now are rough but are below
 
 Update Alpha 1.0
 - A working system (separate or connected to DCS' ATC), that will at least respond to you when you contact on the radio system
--Taxi and parking for after you land
+- Taxi and parking for after you land
 
 Update Alpha 1.1
--Different menus that are similar to BMS, allowing the user to dictate Start-up, Taxi, Takeoff, Landing , parking (or maybe I will dictate it based on state)
+- Different menus that are similar to BMS, allowing the user to dictate Start-up, Taxi, Takeoff, Landing , parking (or maybe I will dictate it based on state)
