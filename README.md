@@ -6,6 +6,8 @@ If you look at the attached file, that is my current work for .lua . There is mo
 
 As you can see in the above image, I am making pretty good progress and will be releasing here at some point. I want it to be a bit more function filled before I drop it so bear with me.
 
+I AM LOOKING FOR VOICE RECORDING PEOPLE. PLEASE MESSAGE ME ON DISCORD
+
 A mod/script for the popular game DCS. This will hopefully work to slowly improve and upgrade their ATC system. As of right now, I am still working on it and trying to get it implemented, bear with me and if you feel that you can help, add me on discord @spicy2160
 
 Plans right now are rough but are below (attached to this repo is the .lua I am building on)
