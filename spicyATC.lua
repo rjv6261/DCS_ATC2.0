@@ -1,6 +1,5 @@
 -- spicyATC.lua - BMS-style ATC for DCS Missions written by Spicy
 -- Uses missionCommands for '/' comms menu integration
-
 local function getClosestAirbases(unit, num)
     env.info("SpicyATC: Getting closest airbases for unit " .. (unit and unit:getName() or "nil"))
     if not unit or not unit:isExist() then return {} end
@@ -23,29 +22,44 @@ local function getClosestAirbases(unit, num)
     end
     return closest
 end
-
 local function adviseFreq(unit, closestAirbases)
     env.info("SpicyATC: Advising freq for unit " .. (unit and unit:getName() or "nil"))
     if not unit or not unit:isExist() then return false end
     local comm = unit:getCommunicator()
-    if not comm then 
+    local playerFreq
+    if comm then
+        local success, result = pcall(comm.getFrequency, comm)
+        if success then
+            playerFreq = result / 1000000
+        else
+            env.info("SpicyATC: pcall failed for getFrequency: " .. result)
+            playerFreq = nil
+        end
+    else
         env.info("SpicyATC: No communicator, assuming wrong freq")
-        return false  -- Force freq check failure if no communicator
+        playerFreq = nil
     end
-    local playerFreq = comm:getFrequency() / 1000000
-    local msg = "ATC: Wrong freq. Closest airfields: "
+    local msg = "ATC: Get on FREQ "
     local onRightFreq = false
-    for i, airbase in ipairs(closestAirbases) do
-        local abFreq = airbase:getFrequency() / 1000000
-        msg = msg .. airbase:getName() .. " " .. abFreq .. " MHz, "
-        if playerFreq == abFreq then onRightFreq = true end
+    if #closestAirbases > 0 then
+        local homeAirbase = closestAirbases[1]  -- Closest is home base
+        local success, abFreq = pcall(homeAirbase.getFrequency, homeAirbase)
+        if success then
+            abFreq = abFreq / 1000000
+            msg = msg .. abFreq .. " MHz for " .. homeAirbase:getName()
+            if playerFreq and playerFreq == abFreq then onRightFreq = true end
+        else
+            env.info("SpicyATC: pcall failed for airbase getFrequency: " .. abFreq)
+            msg = "ATC: Get on FREQ for home airbase (check kneeboard)"
+            trigger.action.outTextForUnit(unit:getID(), msg, 10, false)
+            return false
+        end
     end
     if not onRightFreq and #closestAirbases > 0 then
-        trigger.action.outTextForUnit(unit:getID(), msg:sub(1, -3), 10, false)
+        trigger.action.outTextForUnit(unit:getID(), msg, 10, false)
     end
     return onRightFreq
 end
-
 local function requestStartup()
     env.info("SpicyATC: Request Startup called")
     local unit = world.getPlayer()
@@ -55,13 +69,11 @@ local function requestStartup()
     end
     local closestAirbases = getClosestAirbases(unit, 3)
     if #closestAirbases == 0 then env.info("SpicyATC: No airbases to check freq"); return end
-    -- Skip freq check for startup (BMS ground crew behavior)
     local group = unit:getGroup()
     local numUnits = #group:getUnits()
     local msg = numUnits > 1 and "Flight cleared for startup (" .. numUnits .. " aircraft)" or "Cleared for startup"
     trigger.action.outTextForUnit(unit:getID(), "ATC Ground: " .. msg, 10, false)
 end
-
 local function requestTaxi()
     env.info("SpicyATC: Request Taxi called")
     local unit = world.getPlayer()
@@ -77,7 +89,6 @@ local function requestTaxi()
         trigger.action.outTextForUnit(unit:getID(), "ATC Ground: " .. msg, 10, false)
     end
 end
-
 local function requestTakeoff()
     env.info("SpicyATC: Request Takeoff called")
     local unit = world.getPlayer()
@@ -93,7 +104,6 @@ local function requestTakeoff()
         trigger.action.outTextForUnit(unit:getID(), "ATC Tower: " .. msg, 10, false)
     end
 end
-
 local function requestInbound()
     env.info("SpicyATC: Request Inbound called")
     local unit = world.getPlayer()
@@ -109,7 +119,6 @@ local function requestInbound()
         trigger.action.outTextForUnit(unit:getID(), "ATC Approach: " .. msg, 10, false)
     end
 end
-
 local function addATCMenus(coalitionID)
     env.info("SpicyATC: Adding menus for coalition " .. coalitionID)
     local spicyATCMenu = missionCommands.addSubMenuForCoalition(coalitionID, "SpicyATC") -- Direct under F10 Other
