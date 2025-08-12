@@ -8,6 +8,9 @@ As you can see in the above image, I am making pretty good progress and will be 
 
 I AM LOOKING FOR VOICE RECORDING PEOPLE. PLEASE MESSAGE ME ON DISCORD
 
+![fart](test2.png)
+This is a good indicator of what it will look like on release. Also, as you can see, I have got the ground ATC working.
+
 A mod/script for the popular game DCS. This will hopefully work to slowly improve and upgrade their ATC system. As of right now, I am still working on it and trying to get it implemented, bear with me and if you feel that you can help, add me on discord @spicy2160
 
 Plans right now are rough but are below (attached to this repo is the .lua I am building on)
