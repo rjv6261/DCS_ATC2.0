@@ -1,6 +1,6 @@
 # DCS_ATC 2.0
 
-If you look at the attached file, that is my current work for .lua . There is more going on and I am simply including the main file so that others can see progress on it as we go. I have a solid idea of what I want to improve and add to DCS.
+If you look at the attached file, that is my current work for .lua . There is more work to do with it and I am simply including the main file so that others can see progress on it as we go. I have a solid idea of what I want to improve and add to DCS.
 
 ![Test](test1.png)
 
