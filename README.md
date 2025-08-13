@@ -1,4 +1,6 @@
-# DCS_ATC 2.0
+# DCS_ATC 2.0 UPDATED 8/13 
+
+I am learning the new dcs API tools that they gave us access to this july. Also, the game updated today and it seems to be a very heavy update. I assume things will break. I will try and get a working version up ASAP but bear wit me.
 
 If you look at the attached file, that is my current work for .lua . There is more work to do with it and I am simply including the main file so that others can see progress on it as we go. I have a solid idea of what I want to improve and add to DCS.
 
