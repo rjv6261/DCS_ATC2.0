@@ -100,7 +100,7 @@ While I have grinded out the framework, I expect the releases to slow down just 
 ## Things planned but are far away
 - I want it to run completly dynamically. ED doesnt keep track of taxi lanes, so having it tell you where to taxi, is either going to have to be hard coded, or im going to have to find a way to track them.
 - Translations for radio lines + messages
-- A faster version (i am doing a ton of cordinate + speed math). It can for sure detect states faster. LUA isnt fun to try and make efficient.
+- A faster version (i am doing a ton of coordinate + speed math). It can for sure detect states faster. LUA isnt fun to try and make efficient.
 
 
 # Contributing + credits
