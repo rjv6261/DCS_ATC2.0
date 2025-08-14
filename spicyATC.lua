@@ -1,12 +1,7 @@
--- spicyATC.lua - BMS-style ATC for DCS Missions (FULL CIRCLE v2 + LOGGING)
+-- spicyATC-BMS‑style ATC for DCS Missions (auto-assign base and runway takeoff gating)
 -- Author: Spicy
--- Scope: Single-player oriented (world.getPlayer) but coalition-safe. Uses only BLUE/RED/NEUTRAL.
--- Goal: Coalition-scoped airbase menus with nearest recommendation, full state flow, telemetry, and
---       detailed logging of *every key data query* (points, lists, events, state transitions).
+--Version: Alpha 0.1
 
----------------------------
--- Logging (file + dcs.log)
----------------------------
 local LOG_FH = nil
 local LOG_PATH = nil
 
@@ -54,7 +49,8 @@ _log_open()
 ---------------------------
 -- State & Structures
 ---------------------------
-local players          = {}   -- unitName -> { coalitionID, unitID, airbaseName, state }
+-- Each player record now also tracks hasTakenOff (true when the player has left the runway).
+local players          = {}   -- unitName -> { coalitionID, unitID, airbaseName, state, engineStarted, hasTakenOff }
 local unitCoalitions   = {}   -- unitName -> coalitionID
 local takeoffQueues    = {}   -- airbaseName -> { unitName1, ... }
 local landingQueues    = {}   -- airbaseName -> { unitName1, ... }
@@ -139,6 +135,7 @@ local function getPlayerContext()
   return ctx
 end
 
+-- Capture telemetry for logging and range checks
 local function captureTelemetry(unit)
   if not unit or not unit.isExist or not unit:isExist() then return end
   local name = unit:getName()
@@ -198,6 +195,7 @@ local requestStartup
 local requestTaxi
 local requestTakeoff
 local requestHandoff
+local requestSlasherCheckIn
 local setAirborne
 local requestInbound
 local requestApproach
@@ -207,6 +205,7 @@ local requestShutdown
 local onEvent
 local retryAddMenus
 local periodicApproachTick
+local requestSlasherCheckIn
 
 ---------------------------
 -- Menu Building
@@ -215,32 +214,31 @@ ensureMenusForCoalition = function(coalitionID)
   if not coalitionID then return end
   menuPaths[coalitionID] = menuPaths[coalitionID] or {}
   local paths = menuPaths[coalitionID]
-
   if not paths.root then
     -- Root
     paths.root = missionCommands.addSubMenuForCoalition(coalitionID, "SpicyATC")
     -- Submenus
     paths.ground   = missionCommands.addSubMenuForCoalition(coalitionID, "Ground",   paths.root)
     paths.tower    = missionCommands.addSubMenuForCoalition(coalitionID, "Tower",    paths.root)
-    paths.approach = missionCommands.addSubMenuForCoalition(coalitionID, "Approach", paths.root)
-
+    -- Rename the Approach menu to Slasher to match radio calls
+    paths.approach = missionCommands.addSubMenuForCoalition(coalitionID, "Slasher", paths.root)
     -- Ground commands
-    rebuildAirbaseList(coalitionID) -- "Select Home Airbase" under Ground
+    -- The home airbase is assigned automatically on spawn, so we no longer
+    -- present a "Select Home Airbase" menu here.
     missionCommands.addCommandForCoalition(coalitionID, "Request Startup",     paths.ground,   requestStartup)
     missionCommands.addCommandForCoalition(coalitionID, "Request Taxi",        paths.ground,   requestTaxi)
     missionCommands.addCommandForCoalition(coalitionID, "Taxi to Parking",     paths.ground,   requestTaxiToParking)
     missionCommands.addCommandForCoalition(coalitionID, "Shutdown",            paths.ground,   requestShutdown)
     missionCommands.addCommandForCoalition(coalitionID, "Refresh Airbase List",paths.ground,   function() rebuildAirbaseList(coalitionID) end)
-
     -- Tower commands
     missionCommands.addCommandForCoalition(coalitionID, "Request Takeoff",     paths.tower,    requestTakeoff)
     missionCommands.addCommandForCoalition(coalitionID, "Request Handoff",     paths.tower,    requestHandoff)
     missionCommands.addCommandForCoalition(coalitionID, "Request Landing",     paths.tower,    requestLanding)
-
     -- Approach commands
     missionCommands.addCommandForCoalition(coalitionID, "Request Inbound",     paths.approach, requestInbound)
     missionCommands.addCommandForCoalition(coalitionID, "Request Approach",    paths.approach, requestApproach)
-
+    -- Free check‑in option for Slasher
+    missionCommands.addCommandForCoalition(coalitionID, "Check In",        paths.approach, requestSlasherCheckIn)
     logf("ensureMenusForCoalition(%s): built", tostring(coalitionID))
   end
 end
@@ -249,15 +247,12 @@ rebuildAirbaseList = function(coalitionID)
   if not coalitionID then return end
   local paths = menuPaths[coalitionID]
   if not paths or not paths.ground then return end
-
   -- Remove old select list
   if paths.selectAB then
     missionCommands.removeItemForCoalition(coalitionID, paths.selectAB)
     paths.selectAB = nil
   end
-
   paths.selectAB = missionCommands.addSubMenuForCoalition(coalitionID, "Select Home Airbase", paths.ground)
-
   -- Recommended (nearest owned)
   missionCommands.addCommandForCoalition(coalitionID, "Recommended (Nearest Owned)", paths.selectAB, function()
     local ctx = getPlayerContext(); if not ctx then return end
@@ -268,7 +263,6 @@ rebuildAirbaseList = function(coalitionID)
       trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: No owned airbases found.", 10, false)
     end
   end)
-
   -- Owned list only
   local list = listCoalitionAirbases(coalitionID)
   if #list == 0 then
@@ -289,23 +283,45 @@ end
 selectAirbase = function(args)
   local abName = args and args.airbaseName or nil
   local ctx = getPlayerContext(); if not ctx or not abName then return end
-
-  local p = players[ctx.unitName] or { coalitionID = ctx.coalitionID, unitID = ctx.unitID, airbaseName = nil, state = "not_started" }
+  local p = players[ctx.unitName] or { coalitionID = ctx.coalitionID, unitID = ctx.unitID, airbaseName = nil, state = "not_started", engineStarted = false, hasTakenOff = false }
   players[ctx.unitName] = p
   p.coalitionID = ctx.coalitionID
   p.unitID      = ctx.unitID
   p.airbaseName = abName
   if not p.state or p.state == "airborne" then p.state = "not_started" end
-
   logf("selectAirbase: unit=%s set=%s", tostring(ctx.unitName), tostring(abName))
   trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Home airbase set to " .. abName .. ".", 10, false)
+end
+
+-- Automatically assign the nearest owned airbase to the player if none is set.
+local function autoAssignHomeBase(ctx)
+  if not ctx then return end
+  local p = players[ctx.unitName]
+  if p and not p.airbaseName then
+    local ab = nearestOwnedAirbase(ctx.unit, ctx.coalitionID)
+    if ab then
+      p.airbaseName = getAirbaseName(ab)
+      trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Home airbase set to " .. p.airbaseName .. ".", 10, false)
+      logf("autoAssignHomeBase: unit=%s assigned=%s", tostring(ctx.unitName), tostring(p.airbaseName))
+    else
+      trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: No owned airbases found.", 10, false)
+    end
+  end
 end
 
 requestStartup = function()
   local ctx = getPlayerContext(); if not ctx then return end
   local p = players[ctx.unitName]
-  if not p or not p.airbaseName then
-    trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Select home airbase first.", 10, false); return
+  if not p then
+    -- If no player record exists (e.g. birth event not processed yet), create one
+    p = { coalitionID = ctx.coalitionID, unitID = ctx.unitID, airbaseName = nil, state = "not_started", engineStarted = false, hasTakenOff = false }
+    players[ctx.unitName] = p
+  end
+  -- Auto assign home base if needed
+  autoAssignHomeBase(ctx)
+  -- If no home base is set yet, try to assign one but do not block startup
+  if not p.airbaseName then
+    autoAssignHomeBase(ctx)
   end
   if p.state ~= "not_started" then
     trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Not in correct state for startup.", 10, false); return
@@ -313,7 +329,12 @@ requestStartup = function()
   p.state = "started"
   local group = ctx.group
   local numUnits = group and group.getUnits and #group:getUnits() or 1
-  local msg = numUnits > 1 and ("Flight cleared for startup (" .. numUnits .. " aircraft).") or "Cleared for startup."
+  local msg = nil
+  if numUnits > 1 then
+    msg = "Flight cleared for startup (" .. numUnits .. " aircraft). Contact tower for taxi."
+  else
+    msg = "Cleared for startup. Contact tower for taxi."
+  end
   logf("requestStartup: unit=%s state=started", tostring(ctx.unitName))
   trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Ground: " .. msg, 10, false)
 end
@@ -321,22 +342,58 @@ end
 requestTaxi = function()
   local ctx = getPlayerContext(); if not ctx then return end
   local p = players[ctx.unitName]
-  if not p or not p.airbaseName then
-    trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Select home airbase first.", 10, false); return
+  if not p then
+    p = { coalitionID = ctx.coalitionID, unitID = ctx.unitID, airbaseName = nil, state = "not_started", engineStarted = false, hasTakenOff = false }
+    players[ctx.unitName] = p
+  end
+  autoAssignHomeBase(ctx)
+  -- If no home base is set yet, try to assign one but do not block taxi
+  if not p.airbaseName then
+    autoAssignHomeBase(ctx)
+  end
+  -- If already taxiing, repeat the taxi clearance instead of erroring
+  if p.state == "on_taxi" then
+    trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Ground: Taxi to the runway and hold short. Contact Tower for takeoff", 10, false)
+    return
   end
   if p.state ~= "started" then
     trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Not cleared for taxi yet.", 10, false); return
   end
   p.state = "on_taxi"
   logf("requestTaxi: unit=%s state=on_taxi", tostring(ctx.unitName))
-  trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Ground: Taxi via E, right on D. Hold short runway 09.", 10, false)
+  -- Simplified taxi instructions (no explicit taxiway letters)
+  trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Ground: Taxi to the runway and hold short. Contact tower for takeoff", 10, false)
+
+  -- Record the starting point of the taxi for movement check
+  captureTelemetry(ctx.unit)
+  local t = telemetry[ctx.unitName]
+  if t then
+    p.taxiStartPoint = t.point
+    logf("requestTaxi: stored taxiStartPoint for %s at (x=%.1f,z=%.1f)", ctx.unitName, t.point.x or 0, t.point.z or 0)
+  end
 end
 
 requestTakeoff = function()
   local ctx = getPlayerContext(); if not ctx then return end
   local p = players[ctx.unitName]
-  if not p or not p.airbaseName then
-    trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Select home airbase first.", 10, false); return
+  if not p then
+    p = { coalitionID = ctx.coalitionID, unitID = ctx.unitID, airbaseName = nil, state = "not_started", engineStarted = false, hasTakenOff = false }
+    players[ctx.unitName] = p
+  end
+  autoAssignHomeBase(ctx)
+  -- If no home base is set yet, try to assign one but do not block takeoff
+  if not p.airbaseName then
+    autoAssignHomeBase(ctx)
+  end
+  -- Ensure the aircraft has moved away from the taxi starting point before takeoff
+  captureTelemetry(ctx.unit)
+  local tCurr = telemetry[ctx.unitName]
+  if p.taxiStartPoint and tCurr and tCurr.point then
+    local distMoved = planarDistanceMeters(p.taxiStartPoint, tCurr.point)
+    if distMoved < 50 then
+      trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Taxi to the runway before requesting takeoff.", 10, false)
+      return
+    end
   end
   if p.state ~= "on_taxi" then
     trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Not cleared for takeoff yet.", 10, false); return
@@ -349,7 +406,7 @@ requestTakeoff = function()
   logf("requestTakeoff: unit=%s queuedPos=%d at=%s", tostring(ctx.unitName), pos, tostring(abName))
   if pos == 1 then
     p.state = "take_off"
-    trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Tower: Cleared takeoff runway 09, fly heading 270.", 10, false)
+    trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Tower: Cleared for takeoff. Fly runway heading. Contact 3 miles away for hand-off.", 10, false)
   else
     trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Tower: Hold short, you are number " .. pos .. " for takeoff.", 10, false)
   end
@@ -357,12 +414,23 @@ end
 
 requestHandoff = function()
   local ctx = getPlayerContext(); if not ctx then return end
-  local p = players[ctx.unitName]; if not p or not p.airbaseName then return end
+  local p = players[ctx.unitName]; if not p then return end
   if p.state ~= "take_off" then
     trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Not in takeoff state.", 10, false); return
   end
+  -- Require the player to have left the runway before handoff (runway takeoff event).
+  if not p.hasTakenOff then
+    trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: You have not taken off yet.", 10, false); return
+  end
   logf("requestHandoff: unit=%s -> airborne", tostring(ctx.unitName))
   setAirborne(ctx.unitName)
+end
+
+-- Slasher check‑in command: free trigger after handoff
+requestSlasherCheckIn = function()
+  local ctx = getPlayerContext(); if not ctx then return end
+  -- Slasher acknowledges check‑in and instructs player to fly their mission
+  trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Slasher: Check‑in acknowledged. Fly your planned mission. Safe flights, Slasher out.", 10, false)
 end
 
 setAirborne = function(unitName)
@@ -370,9 +438,10 @@ setAirborne = function(unitName)
   local abName = p.airbaseName
   p.state = "airborne"
   p.airbaseName = nil
+  p.hasTakenOff = false -- reset flag for next cycle
+  p.taxiStartPoint = nil -- clear taxi start for next cycle
   logf("setAirborne: unit=%s departed=%s", tostring(unitName), tostring(abName))
-  trigger.action.outTextForCoalition(p.coalitionID, "ATC Tower: Handoff acknowledged. Good flight.", 10, false)
-
+  trigger.action.outTextForCoalition(p.coalitionID, "ATC Tower: Handoff acknowledged. Contact Slasher to check in.", 10, false)
   local q = takeoffQueues[abName]
   if q then
     for i, u in ipairs(q) do if u == unitName then table.remove(q, i) break end end
@@ -381,7 +450,7 @@ setAirborne = function(unitName)
       local nextP = players[nextUnit]
       if nextP then
         nextP.state = "take_off"
-        trigger.action.outTextForCoalition(nextP.coalitionID, "ATC Tower: You are now cleared for takeoff runway 09.", 10, false)
+        trigger.action.outTextForCoalition(nextP.coalitionID, "ATC Tower: You are now cleared for takeoff.", 10, false)
         logf("setAirborne: next cleared=%s", tostring(nextUnit))
       end
     end
@@ -390,9 +459,8 @@ end
 
 requestInbound = function()
   local ctx = getPlayerContext(); if not ctx then return end
-  local p = players[ctx.unitName] or { coalitionID = ctx.coalitionID, unitID = ctx.unitID, state = "airborne" }
+  local p = players[ctx.unitName] or { coalitionID = ctx.coalitionID, unitID = ctx.unitID, state = "airborne", engineStarted = true, hasTakenOff = true }
   players[ctx.unitName] = p
-
   if not p.airbaseName then
     local ab = nearestOwnedAirbase(ctx.unit, ctx.coalitionID)
     if ab then
@@ -402,7 +470,6 @@ requestInbound = function()
       trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: No owned airbases to inbound to.", 10, false); return
     end
   end
-
   if p.state ~= "airborne" or not ctx.unit:inAir() then
     trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Not airborne or incorrect state.", 10, false); return
   end
@@ -410,7 +477,8 @@ requestInbound = function()
   landingQueues[p.airbaseName] = landingQueues[p.airbaseName] or {}
   table.insert(landingQueues[p.airbaseName], ctx.unitName)
   logf("requestInbound: unit=%s dest=%s", tostring(ctx.unitName), tostring(p.airbaseName))
-  trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Approach: Inbound acknowledged. Fly heading 180 for vectors.", 10, false)
+  -- Simplified inbound call
+  trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Slasher: Inbound acknowledged. Continue to base. Call Tower for landing when approach cleared.", 10, false)
 end
 
 requestApproach = function()
@@ -426,7 +494,7 @@ requestApproach = function()
   end
   p.state = "approach"
   logf("requestApproach: unit=%s -> approach (%s)", tostring(ctx.unitName), tostring(p.airbaseName))
-  trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Approach: Approach cleared. Expect vectors to runway.", 10, false)
+  trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Slasher: Approach cleared. Contact Tower for landing clearance.", 10, false)
 end
 
 requestLanding = function()
@@ -440,7 +508,7 @@ requestLanding = function()
   for i, u in ipairs(q) do if u == ctx.unitName then pos = i break end end
   logf("requestLanding: unit=%s queuePos=%d dest=%s", tostring(ctx.unitName), pos, tostring(p.airbaseName))
   if pos == 1 then
-    trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Tower: Cleared to land runway 09.", 10, false)
+    trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Tower: Cleared to land. Contact ground for parking.", 10, false)
   else
     trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Tower: Number " .. pos .. " for landing. Maintain pattern.", 10, false)
   end
@@ -448,21 +516,26 @@ end
 
 requestTaxiToParking = function()
   local ctx = getPlayerContext(); if not ctx then return end
-  local p = players[ctx.unitName]; if not p or not p.airbaseName then return end
-  if p.state ~= "landed" then
-    trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Not landed.", 10, false); return
+  local p = players[ctx.unitName]
+  if not p then
+    p = { coalitionID = ctx.coalitionID, unitID = ctx.unitID, airbaseName = nil, state = "landed", engineStarted = false, hasTakenOff = false }
+    players[ctx.unitName] = p
   end
+  -- Allow taxi to parking without state requirement
   p.state = "parked"
   logf("requestTaxiToParking: unit=%s -> parked", tostring(ctx.unitName))
-  trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Ground: Taxi in reverse of original path to parking.", 10, false)
+  -- Simplified parking instructions
+  trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Ground: Taxi to parking.", 10, false)
 end
 
 requestShutdown = function()
   local ctx = getPlayerContext(); if not ctx then return end
-  local p = players[ctx.unitName]; if not p or not p.airbaseName then return end
-  if p.state ~= "parked" then
-    trigger.action.outTextForCoalition(ctx.coalitionID, "ATC: Not parked.", 10, false); return
+  local p = players[ctx.unitName]
+  if not p then
+    p = { coalitionID = ctx.coalitionID, unitID = ctx.unitID, airbaseName = nil, state = "parked", engineStarted = false, hasTakenOff = false }
+    players[ctx.unitName] = p
   end
+  -- Allow shutdown at any time without state requirement
   logf("requestShutdown: unit=%s shutdown complete", tostring(ctx.unitName))
   trigger.action.outTextForCoalition(ctx.coalitionID, "ATC Ground: Cleared for shutdown. Good day.", 10, false)
 end
@@ -478,8 +551,7 @@ onEvent = function(event)
   local iname = initiator and (initiator.getName and initiator:getName()) or "<nil>"
   local pname = place and getAirbaseName(place) or "<nil>"
   logf("onEvent: id=%s initiator=%s place=%s", tostring(id), tostring(iname), tostring(pname))
-
-  if event.id == world.event.S_EVENT_BIRTH then
+  if id == world.event.S_EVENT_BIRTH then
     local unit = event.initiator
     if unit and unit.isExist and unit:isExist() and unit.getPlayerName and unit:getPlayerName() then
       local name = unit:getName()
@@ -487,31 +559,50 @@ onEvent = function(event)
       unitCoalitions[name] = coa
       ensureMenusForCoalition(coa)
       captureTelemetry(unit)
+      players[name] = players[name] or { coalitionID = coa, unitID = unit:getID(), airbaseName = nil, state = "not_started", engineStarted = false, hasTakenOff = false }
       logf("BIRTH: player=%s coalition=%s", tostring(name), tostring(coa))
+      -- Automatically assign nearest owned airbase using the spawning unit
+      local p = players[name]
+      local ab = nearestOwnedAirbase(unit, coa)
+      if ab and p then
+        p.airbaseName = getAirbaseName(ab)
+        trigger.action.outTextForCoalition(coa, "ATC: Home airbase set to " .. p.airbaseName .. ".", 10, false)
+        logf("autoAssignHomeBase: unit=%s assigned=%s", tostring(name), tostring(p.airbaseName))
+      end
     end
-
-  elseif event.id == world.event.S_EVENT_RUNWAY_TAKEOFF then
+  elseif id == world.event.S_EVENT_ENGINE_STARTUP then
+    -- We no longer gate handoff on engine startup, but keep for logging
+    local unit = event.initiator
+    if unit and unit.isExist and unit:isExist() and unit.getPlayerName and unit:getPlayerName() then
+      local name = unit:getName()
+      local p = players[name]
+      if p then
+        p.engineStarted = true
+        logf("ENGINE_STARTUP: %s", tostring(name))
+      end
+    end
+  elseif id == world.event.S_EVENT_RUNWAY_TAKEOFF then
+    -- Mark that the player has left the runway; do not hand off automatically
     local unit = event.initiator
     if unit and unit.isExist and unit:isExist() and unit.getPlayerName and unit:getPlayerName() then
       local name = unit:getName()
       captureTelemetry(unit)
       local p = players[name]
-      if p and (p.state == "take_off" or p.state == "on_taxi") then
-        setAirborne(name)
+      if p then
+        p.hasTakenOff = true
+        logf("RUNWAY_TAKEOFF: player=%s marked as taken off", tostring(name))
       end
       local placeName = place and getAirbaseName(place) or "unknown"
       pointOf(place, "RUNWAY_TAKEOFF place:" .. placeName)
       logf("RUNWAY_TAKEOFF: %s from %s", tostring(name), tostring(placeName))
     end
-
-  elseif event.id == world.event.S_EVENT_TAKEOFF then
+  elseif id == world.event.S_EVENT_TAKEOFF then
     local unit = event.initiator
     if unit and unit.isExist and unit:isExist() and unit.getPlayerName and unit:getPlayerName() then
       captureTelemetry(unit)
       logf("TAKEOFF: %s", tostring(unit:getName()))
     end
-
-  elseif event.id == world.event.S_EVENT_LAND then
+  elseif id == world.event.S_EVENT_LAND then
     local unit = event.initiator
     if unit and unit.isExist and unit:isExist() and unit.getPlayerName and unit:getPlayerName() then
       local name = unit:getName()
@@ -529,7 +620,7 @@ onEvent = function(event)
             local nextUnit = q[1]
             local nextP = players[nextUnit]
             if nextP then
-              trigger.action.outTextForCoalition(nextP.coalitionID, "ATC Tower: You are now cleared to land runway 09.", 10, false)
+              trigger.action.outTextForCoalition(nextP.coalitionID, "ATC Tower: You are now cleared to land. Contact Ground for parking.", 10, false)
               logf("LAND: cleared next=%s", tostring(nextUnit))
             end
           end
@@ -551,7 +642,18 @@ periodicApproachTick = function()
       if d <= 10 * 1852 then
         p.state = "approach"
         logf("tick: state -> approach for %s", tostring(ctx.unitName))
-        trigger.action.outTextForCoalition(p.coalitionID, "ATC: Entering approach phase.", 10, false)
+        trigger.action.outTextForCoalition(p.coalitionID, "ATC: Entering approach phase. Contact tower for landing", 10, false)
+      end
+    end
+
+    -- Detect takeoff based on speed if the runway takeoff event is not fired
+    for unitName, playerData in pairs(players) do
+      if playerData.state == "take_off" and not playerData.hasTakenOff then
+        local t = telemetry[unitName]
+        if t and t.speed_mps and t.speed_mps > 90 then
+          playerData.hasTakenOff = true
+          logf("speed check: %s speed=%.1f m/s marked as taken off", unitName, t.speed_mps)
+        end
       end
     end
   end
@@ -585,6 +687,4 @@ world.addEventHandler({ onEvent = onEvent })
 timer.scheduleFunction(periodicApproachTick, {}, timer.getTime() + 30)
 timer.scheduleFunction(retryAddMenus,        {}, timer.getTime() + 5)
 
--- Ensure the log file is closed on mission end via atexit-like behavior
--- (DCS doesn't provide explicit mission-end hook here; keeping file open is fine)
 -- _log_close()
