@@ -109,4 +109,4 @@ Suggestions for Bug fixes, new features, or improvements to realism are welcome.
 
 ## License
 
-This project is released under the MIT license. You have my permission to do whatever you see fit with it, as long as I get credit.
+This project is released under the MIT license. You have my permission to do whatever you see fit with it, as long as credit is given.
