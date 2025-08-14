@@ -40,7 +40,7 @@ Built by Spicy @spicy2160 (discord)
 
 No additional mods or tools are required.
 
-## Usage
+## Usage (I am going to make a tutorial video, not right now.)
 
 When you start the mission, open the F10 menu and select SpicyATC. You will see submenus for Ground, Tower, and Slasher (idk what this is called in BMS, for now pretend it is your overlord). I have tested it for jets and know that it works for now. Helicopters are most likely not full function. I have tested on red and blue coalition.
 
