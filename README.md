@@ -24,7 +24,7 @@ Built by Spicy @spicy2160 (discord)
 
 ## Installation
 
-1. Download the spicyATC.lua file from the latest release.
+1. Download the latest release .zip file from the releases page.
 
 2. Copy the script into your DCS mission’s Scripts folder or another location of your choice. (C:\Users\{user}\Saved Games\DCS\Scripts)
 
