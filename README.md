@@ -2,6 +2,8 @@
 
 SpicyATC is a custom Lua script for Digital Combat Simulator (DCS) that replaces or augments the built‑in ATC system with a more realistic, BMS‑style sequence. It introduces state‑driven F10 radio menus, automatic airbase assignment, and simple but improved radio lines. The script is coalition‑aware and works in single‑player or co‑op missions (thats all i have tested. The logic is there for multiplayer. Every function probably wont work). ALSO, THERE IS NO WAY TO REMOVE DEFAULT ATC from DCS. I have tried. That thing will show up no matter what. Well, see if i figure it out.
 
+TUTORIAL VIDEO IS HERE --> ([Watch the video](https://youtu.be/wROWrwPhODA?si=41r6IErKsQECUcN9))
+
 Built by Spicy @spicy2160 (discord)
 
 ![test](test1.png)
@@ -16,7 +18,7 @@ Built by Spicy @spicy2160 (discord)
 
 - Hand-offs for radio controllers. Like BMS, I have added a "hand-off" I also want to expand on these
 
-- Queue management – the script queues aircraft for takeoff and landing and notifies each pilot of their position. (this is untested but i think should work lol)
+- Queue management – the script queues aircraft for takeoff and landing and notifies each pilot of their position.
 
 - Redundancy – if a player requests taxi clearance again after already being cleared, the script repeats the original clearance instead of returning an error. (I will work on more robust error handling. However it wont crash)
 
@@ -42,7 +44,7 @@ No additional mods or tools are required.
 
 ## Usage (I am going to make a tutorial video, not right now.)
 
-When you start the mission, open the F10 menu and select SpicyATC. You will see submenus for Ground, Tower, and Slasher (idk what this is called in BMS, for now pretend it is your overlord). I have tested it for jets and know that it works for now. Helicopters are most likely not full function. I have tested on red and blue coalition.
+When you start the mission, open the F10 menu and select SpicyATC. You will see submenus for Ground, Tower, and Slasher (idk what this is called in BMS, for now pretend it is your overlord). I have tested it for jets and helicopters in single player and it works with full text- functionality. I have also tested on red and blue coalition.
 
 At any point, under the ground menu, hit refresh airbase list, and then return to ground menu, to change your home airbase.
 
@@ -89,7 +91,6 @@ While I have grinded out the framework, I expect the releases to slow down just 
 - Runway detection for takeoff and landing instructions. DCS default ATC does this right now so I wasnt so worried about this.
 - Ensure multiplayer support (i think im already done but dont have time to test)
 - Voice lines for all radio calls and variety (I have a very talended @WhiskeyTangoFoxtrot working on a full suite of recordings for the alpha release. Those will follow soon! Thank them lots)
-- Helicopter support (I have worked on this already, but have a few final things to hammer out. Expect this soon)
 - A wider range of radio messages
 
 ## Not so high priority (things not started yet):
@@ -106,6 +107,8 @@ While I have grinded out the framework, I expect the releases to slow down just 
 # Contributing + credits
 
 Suggestions for Bug fixes, new features, or improvements to realism are welcome. I also will happily accept development help with this. Please message me on discord or github or reddit. I work a ton and don't have the time of day to write, test, and maintain this at the rate I have been. Same with voice lines, whatever else.
+
+VOICE ACTORS (yes, i know voice lines arent in yet. Watch the youtube video): @WhiskeyTangoFoxtrot @Erinyes @BakedPotato
 
 ## License
 
