@@ -1,4 +1,6 @@
-# SpicyATC (INSTRUCTIONS UPDATED 09/08/2025)
+# SpicyATC (INSTRUCTIONS UPDATED 02/12/2026)
+
+AT THIS TIME DCS ANNOUNCED THEY PLAN ON RELEASING A NEW REWORKED ATC. THIS MEANS MY WORK WILL SOON BE VOID AND I AM GLAD THEY FINALLY ARE FIXING IT! Thank you all for the support + feedback. Im sorry it never got finished with all of the planned features but that's probably for the best XD. I would have had to write a whole seperate thing to inject audio files for custom voice overs to mission files and frankly I was frowning at the day I had to figure that one out.
 
 SpicyATC is a custom Lua script for Digital Combat Simulator (DCS) that replaces or augments the built‑in ATC system with a more realistic, BMS‑style sequence. It introduces state‑driven F10 radio menus, automatic airbase assignment, and simple but improved radio lines. The script is coalition‑aware and works in single‑player or co‑op missions (thats all i have tested. The logic is there for multiplayer. Every function probably wont work). ALSO, THERE IS NO WAY TO REMOVE DEFAULT ATC from DCS. I have tried. That thing will show up no matter what. Well, see if i figure it out.
 
@@ -7,7 +9,7 @@ TUTORIAL VIDEO IS HERE --> ([Watch the video](https://youtu.be/wROWrwPhODA?si=41
 Built by Spicy @spicy2160 (discord)
 
 ## UPDATES!!!
--At this point I have slowed development(i work a ton + some other personal life stuff) but have not abandoned project. I am working with every bit of free time I have and am slowly making progress on the next update for this script. I want it to be filled with improvments, as well as custom audios. I am writing this solo (if you know how to help please reach out, I never wanted this to become laborious, LOL), and also, I am not a software dev. Learning as we go along. Now, for those still reading, I have added the tool to package custom audios to a .miz file, which is necessary since I am not planning on making .miz files for this, and want to work with YOUR files.
+-At this point I have slowed development(i work a ton + some other personal life stuff). AT THIS TIME DCS/ED HAS ANNOUNCED THAT THEY PLAN ON INTEGRATING A NEW ATC this works for the posted version of DCS, but from what ive seen of the new updates, ATC will be best written by them. You may even see a bit of my code there ;) (maybe). I have added the tool to package custom audios to a .miz file, which is necessary since I am not planning on making .miz files for this, and want to work with YOUR files.
 
 ![test](test1.png)
 
